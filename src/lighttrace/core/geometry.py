@@ -26,18 +26,6 @@ class Plane(SceneObject):
             return True
         return False
 
-        # a = self.normal - ray.anchor
-        # normalized = self.normal.normalized
-        # cos = ray.direction.dot(normalized)
-        # if not cos:
-        #     return False
-        # t = (self.kplane - normalized.dot(a)) / cos
-        # if t > 0:
-        #     ray.t = t
-        #     ray.object = self
-        #     return True
-        # return False
-
     def shade(self, ray: Ray, scene: Scene) -> RGBAPixel:
         p = ray.anchor + (ray.direction * ray.t)
         v = -1 * ray.direction

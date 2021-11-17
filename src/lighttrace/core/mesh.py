@@ -1,12 +1,15 @@
+from .constants import RESOURCE_DIRECTORY
 from .geometry import Polygon
 from .types import AbstractSurface, Vector3
 
-
 from typing import Generator, List
+from pathlib import Path
+
 import re
 
 VERTEX_REGEX = re.compile(r"")
 FACE_REGEX = re.compile(r"")
+
 
 class Mesh:
     def __init__(self, surface: AbstractSurface, offset: Vector3 = None) -> None:
@@ -17,7 +20,7 @@ class Mesh:
         self.surface = surface
 
     def load(self, filename: str) -> None:
-        with open(filename, "r") as f:
+        with open(f"{RESOURCE_DIRECTORY}/{filename}.obj", "r") as f:
             for line in f:
                 tokens = line.split(" ")
                 if tokens[0] == 'v':

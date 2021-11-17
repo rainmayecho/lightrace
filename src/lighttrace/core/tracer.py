@@ -1,10 +1,11 @@
 from PIL import Image, ImageDraw
 
+from .constants import OUTPUT_DIRECTORY
 from .ray import Ray
 from .types import Color, Scene, Vector3, Viewport
 
 from typing import List
-
+from pathlib import Path
 
 class Tracer:
     def __init__(self, viewport: Viewport = None, scene: Scene = None, filename: str = "output") -> None:
@@ -12,7 +13,7 @@ class Tracer:
         self.scene = scene or Scene()
         self.image = Image.new("RGB", (self.viewport.width, self.viewport.height))
         self.draw = ImageDraw.Draw(self.image)
-        self.__filename = f"{filename}.png"
+        self.__filename = Path(f"{OUTPUT_DIRECTORY}/{filename}.png")
 
     @staticmethod
     def print_progress(percent: float) -> None:

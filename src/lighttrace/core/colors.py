@@ -15,3 +15,8 @@ class Colors:
     GREY_6 = Color(64, 64, 64)
     GREY_7 = Color(128, 128, 128)
     WHITE = Color(255, 255, 255)
+
+    MATTE_YELLOW = Color(255,206,11)
+    MATTE_RED = Color(232,63,104)
+    MATTE_BLUE = Color(0,146,214)
+    MATTE_GREEN = Color(0,169,137)
