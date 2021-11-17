@@ -23,7 +23,7 @@ class Tracer:
             print(bar, end="\r")
 
     @staticmethod
-    def compute_ray_directions(i: int, j: int, du: Vector3, dv: Vector3, vp: Vector3, antialiasing: bool = True):
+    def compute_ray_directions(i: int, j: int, du: Vector3, dv: Vector3, vp: Vector3, antialiasing: bool = False):
         d = []
         d.append(
             Vector3(
