@@ -16,7 +16,7 @@ def run(filename: str, animate: bool = False) -> None:
     surface_1 = Surface(Colors.MATTE_RED, coefficients_1)
     surface_2 = Surface(Colors.MATTE_YELLOW, coefficients_2)
     mesh = Mesh(surface=surface_2)
-    # mesh.load(filename)
+    mesh.load(filename)
 
     width = 64
     height = 64
@@ -39,7 +39,7 @@ def run(filename: str, animate: bool = False) -> None:
         # Sphere(radius=25, center=Point(350, 50, 100), surface=surface_1),
         # # Sphere(radius=5, center=Point(0, 25, 10), surface=surface_1),
         # Sphere(radius=7, center=Point(10, 10, 10), surface=surface_1),
-        # *mesh.generate_polygons()
+        *mesh.generate_polygons()
     )
     viewport = Viewport(
         width=width,

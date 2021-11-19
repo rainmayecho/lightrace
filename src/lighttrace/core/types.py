@@ -33,7 +33,7 @@ class Scalar(float):
 
 PARAMETER_REGISTRY = {}
 class Parameter:
-    def __init__(self, start: float = 0, stop: float = 0, steps: int = 1):
+    def __init__(self, start: float, stop: float = 0, steps: int = 1):
         self.__start = start
         self.__stop = stop
         self.__value = start
@@ -42,7 +42,7 @@ class Parameter:
 
     def rewind(self) -> None:
         self.__value = self.__start
-    
+
     def __next__(self) -> float:
         if abs(self.__value - self.__stop) > DELTA_SMALL:
             self.__value += self.__delta
@@ -54,7 +54,7 @@ class Parameter:
     def __hash__(self) -> int:
         return hash((self.__start, self.__stop, self.__delta))
 
-StaticParameter = lambda v: Parameter(v)
+StaticParameter = lambda v: Parameter(v, v)
 
 class Parameterized:
     parameters: List[str]
@@ -78,7 +78,7 @@ class ThreeSpace(Generic[T]):
         self.__i = i
         self.__j = j
         self.__k = k
-        
+
         next(self)
         self.mag = self.dot(self)**.5
         self._normalized = None
@@ -88,7 +88,7 @@ class ThreeSpace(Generic[T]):
         self.j: T = next(self.__j)
         self.k: T = next(self.__k)
         return self
-                    
+
     def __add__(self, other: Generic[T]) -> Generic[T]:
         return self.__class__(self.i + other.i, self.j + other.j, self.k + other.k)
 
