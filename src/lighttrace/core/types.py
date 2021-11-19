@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
+from functools import partial
 from math import tan, pi
-from typing import Generic, List, NamedTuple, Optional, TypeVar, Union
+from typing import Generator, Generic, List, NamedTuple, Optional, Tuple, TypeVar, Union
+
+from .constants import DELTA_SMALL
 
 RGBAPixel = NamedTuple("RGBAPixel", [("r", int), ("g", int), ("b", int), ("alpha", int)])
 CoefficientSet = NamedTuple(
@@ -20,15 +23,72 @@ L = TypeVar("L")
 S = TypeVar("S")
 T = TypeVar("T")
 
+class Scalar(float):
+    def __init__(self, v: float) -> None:
+        self.__value = v
+
+    def __call__(self):
+        return self.__value
+
+
+PARAMETER_REGISTRY = {}
+class Parameter:
+    def __init__(self, start: float = 0, stop: float = 0, steps: int = 1):
+        self.__start = start
+        self.__stop = stop
+        self.__value = start
+        self.__delta = (stop - start) / steps
+        PARAMETER_REGISTRY[hash(self)] = self
+
+    def rewind(self) -> None:
+        self.__value = self.__start
+    
+    def __next__(self) -> float:
+        if abs(self.__value - self.__stop) > DELTA_SMALL:
+            self.__value += self.__delta
+        return self.__value
+
+    def __call__(self) -> float:
+        return self.__value
+
+    def __hash__(self) -> int:
+        return hash((self.__start, self.__stop, self.__delta))
+
+StaticParameter = lambda v: Parameter(v)
+
+class Parameterized:
+    parameters: List[str]
+    def __next__(self):
+        for p in self.parameters:
+            if hasattr(self, p):
+                parameter = getattr(self, p)
+                if hasattr(parameter, "__next__"):
+                    next(parameter)
+
+
 class ThreeSpace(Generic[T]):
-    def __init__(self, i: Optional[T] = 0, j: Optional[T] = 0, k: Optional[T] = 0, unused: Optional[T] = None) -> None:
-        self.i = i
-        self.j = j
-        self.k = k
+    def __init__(self, i: Optional[T] = 0, j: Optional[T] = 0, k: Optional[T] = 0, scalar: Optional[Scalar] = 0) -> None:
+        if not isinstance(i, Parameter):
+            i = StaticParameter(i)
+        if not isinstance(j, Parameter):
+            j = StaticParameter(j)
+        if not isinstance(k, Parameter):
+            k = StaticParameter(k)
 
+        self.__i = i
+        self.__j = j
+        self.__k = k
+        
+        next(self)
         self.mag = self.dot(self)**.5
-        self.__normalized = None
+        self._normalized = None
 
+    def __next__(self):
+        self.i: T = next(self.__i)
+        self.j: T = next(self.__j)
+        self.k: T = next(self.__k)
+        return self
+                    
     def __add__(self, other: Generic[T]) -> Generic[T]:
         return self.__class__(self.i + other.i, self.j + other.j, self.k + other.k)
 
@@ -73,7 +133,7 @@ class ThreeSpace(Generic[T]):
         yield self.j
         yield self.k
 
-    def dot(self, other: Generic[T]):
+    def dot(self, other: Generic[T]) -> T:
         return (
             self.i * other.i + self.j * other.j + self.k * other.k
         )
@@ -85,6 +145,7 @@ class Point(ThreeSpace):
 
     def __str__(self) -> str:
         return repr(self)
+
 
 class Color(ThreeSpace):
     def mix(self, other: ThreeSpace) -> ThreeSpace:
@@ -133,26 +194,15 @@ class Color(ThreeSpace):
 
 
 class Vector3(ThreeSpace):
-
-    def __init__(self, i: Optional[T] = 0, j: Optional[T] = 0, k: Optional[T] = 0) -> None:
-        self.i = i
-        self.j = j
-        self.k = k
-
-        mag = self.dot(self)**.5
-        self.mag = mag
-        self.__normalized = None
+    # def __init__(self, i: Optional[T] = 0, j: Optional[T] = 0, k: Optional[T] = 0, scalar: Optional[Scalar] = 0) -> None:
+    #     print(self)
+    #     super().__init__(i, j, k, scalar)
 
     def __repr__(self) -> str:
         return f"<Vector i={self.i}, j={self.j}, k={self.k}>"
 
     def __str__(self) -> str:
         return repr(self)
-
-    def dot(self, other: Generic[T]):
-        return (
-            self.i * other.i + self.j * other.j + self.k * other.k
-        )
 
     def cross(self, other: Generic[T]) -> Generic[T]:
         return Vector3(
@@ -172,9 +222,12 @@ class Vector3(ThreeSpace):
 
     @property
     def normalized(self) -> Generic[T]:
-        if self.__normalized is None:
-            self.__normalized = Vector3(self.i / self.mag, self.j / self.mag, self.k / self.mag)
-        return self.__normalized
+        if self._normalized is None:
+            if self.mag:
+                self._normalized = Vector3(self.i / self.mag, self.j / self.mag, self.k / self.mag)
+            else:
+                self._normalized = self
+        return self._normalized
 
 Vector = Vector3
 
@@ -183,7 +236,9 @@ class LightType(IntEnum):
     DIRECTIONAL = 1
     POINT = 2
 
-class Light:
+class Light(Parameterized):
+    parameters = ("direction", )
+
     def __init__(self, kind: LightType = LightType.AMBIENT, color: Color = None, direction: Vector3 = None) -> None:
         self.type = kind
         self.color = color
@@ -218,6 +273,28 @@ class Scene(Generic[L, S]):
                 raise TypeError(
                     "cannot add item that is neither an instance of a subclass of Light nor SceneObject"
                 )
+
+    def __next__(self):
+        global PARAMETER_REGISTRY
+        for p in PARAMETER_REGISTRY.values():
+            next(p)
+
+
+class Animation:
+    def __init__(self, scene: Scene, frames: int = 1) -> None:
+        self.scene = scene
+        self.frames = frames
+
+    def __iter__(self) -> "Animation":
+        for i in range(self.frames):
+            yield i, self.scene
+            next(self.scene)
+
+    def __enter__(self) -> "Animation":
+        return self
+
+    def __exit__(self, *args):
+        return True
 
 
 class AbstractSurface(ABC):

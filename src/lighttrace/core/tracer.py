@@ -8,12 +8,19 @@ from typing import List
 from pathlib import Path
 
 class Tracer:
-    def __init__(self, viewport: Viewport = None, scene: Scene = None, filename: str = "output") -> None:
+    def __init__(self, viewport: Viewport = None, scene: Scene = None, directory: str = None, filename: str = "output") -> None:
         self.viewport = viewport or Viewport()
         self.scene = scene or Scene()
         self.image = Image.new("RGB", (self.viewport.width, self.viewport.height))
         self.draw = ImageDraw.Draw(self.image)
-        self.__filename = Path(f"{OUTPUT_DIRECTORY}/{filename}.png")
+
+        self.__dir = directory
+        if self.__dir != None:
+            p = Path(f"{OUTPUT_DIRECTORY}/{self.__dir}")
+            p.mkdir(parents=True, exist_ok=True)
+            self.__filename = Path(f"{OUTPUT_DIRECTORY}/{self.__dir}/{filename}.png")
+        else:
+            self.__filename = Path(f"{OUTPUT_DIRECTORY}/{filename}.png")
 
     @staticmethod
     def print_progress(percent: float) -> None:

@@ -1,12 +1,15 @@
 from .ray import Ray
-from .types import AbstractSurface, Point, RGBAPixel, Scene, SceneObject, Vector3
+from .types import AbstractSurface, Parameter, Parameterized, Point, RGBAPixel, Scene, SceneObject, Vector3
 
 from typing import List
 
-class Plane(SceneObject):
+class Plane(SceneObject, Parameterized):
+    parameters = (
+        "center",
+        "normal",
+    )
     def __init__(self, center: Point, normal: Vector3, surface: AbstractSurface) -> None:
         self.center = center
-        self.kplane = center.dot(normal.normalized)
         self.normal = normal.normalized
         self.surface = surface
 
@@ -31,7 +34,10 @@ class Plane(SceneObject):
         v = -1 * ray.direction
         return self.surface.shade(p, v.normalized, self.normal, scene)
 
-class Sphere(SceneObject):
+class Sphere(SceneObject, Parameterized):
+    parameters = (
+        "center",
+    )
     def __init__(self, radius: float = 1, center: Point = None, surface: AbstractSurface = None) -> None:
         self.radius = radius
         self.center = center
@@ -76,6 +82,10 @@ class Polygon(SceneObject):
 
     def __iter__(self):
         return iter(self.__vertices)
+
+    def __next__(self):
+        for v in self.__vertices:
+            next(v)
 
     @property
     def normal(self):
