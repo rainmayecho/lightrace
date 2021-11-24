@@ -1,15 +1,18 @@
+from .constants import INFINITY
 from .ray import Ray
-from .types import AbstractSurface, Parameter, Parameterized, Point, RGBAPixel, Scene, SceneObject, Vector3
+from .types import AbstractSurface, Bounds, BoundsType, Parameterized, Point, RGBAPixel, Scene, SceneObject, Vector3
+from .volume import Volume
 
-from typing import List
+from typing import List, Tuple
 
 class Plane(SceneObject, Parameterized):
+    _type = BoundsType.INFINITE
     parameters = (
         "center",
         "normal",
     )
     def __init__(self, center: Point, normal: Vector3, surface: AbstractSurface) -> None:
-        self.center = center
+        self.__center = center
         self.normal = normal.normalized
         self.surface = surface
 
@@ -34,13 +37,30 @@ class Plane(SceneObject, Parameterized):
         v = -1 * ray.direction
         return self.surface.shade(p, v.normalized, self.normal, scene)
 
+    @property
+    def center(self) -> Point:
+        return self.__center
+
+    @property
+    def bounds(self) -> Volume:
+        bounds = [Bounds(-INFINITY, INFINITY) for _ in range(3)]
+        for idx, normal_component in enumerate(self.normal):
+            if not normal_component:
+                v = self.normal[idx]
+                bounds[idx] = Bounds(v, v)
+        return Volume(*bounds)
+
+
+
 class Sphere(SceneObject, Parameterized):
-    parameters = (
+    _type = BoundsType.FINITE
+    attrs = (
+        "radius",
         "center",
     )
     def __init__(self, radius: float = 1, center: Point = None, surface: AbstractSurface = None) -> None:
         self.radius = radius
-        self.center = center
+        self.__center = center
         self.surface = surface
 
     def intersect(self, ray: Ray) -> bool:
@@ -73,8 +93,30 @@ class Sphere(SceneObject, Parameterized):
         n = (p - self.center).normalized
         return self.surface.shade(p, v, n, scene)
 
+    @property
+    def center(self) -> Point:
+        return self.__center
+
+
+    @property
+    def bounds(self) -> Tuple[Bounds]:
+        c = self.center
+        r = self.radius
+        return Volume(
+            i=Bounds(min=c.i - r, max=c.i + r),
+            j=Bounds(min=c.j - r, max=c.j + r),
+            k=Bounds(min=c.k - r, max=c.k + r),
+        )
+
 
 class Polygon(SceneObject):
+    _type = BoundsType.FINITE
+
+    attrs = (
+        "center",
+        "normal",
+    )
+
     def __init__(self, vertices: List[Vector3], surface: AbstractSurface) -> None:
         self.__vertices = vertices
         self.surface = surface
@@ -137,3 +179,28 @@ class Polygon(SceneObject):
         v = ray.direction.normalized * -1
         return self.surface.shade(p, v, self.normal, scene)
 
+    @property
+    def center(self) -> Point:
+        p = Point()
+        for v in self.vertices:
+            p += v
+        return (p * (1 / len(self.vertices)))
+
+    @property
+    def bounds(self) -> Tuple[Bounds]:
+        min_i, max_i = INFINITY, -INFINITY
+        min_j, max_j = INFINITY, -INFINITY
+        min_k, max_k = INFINITY, -INFINITY
+        for vertex in self.vertices:
+            min_i = min(vertex.i, min_i)
+            min_j = min(vertex.j, min_j)
+            min_k = min(vertex.k, min_k)
+
+            max_i = max(vertex.i, max_i)
+            max_j = max(vertex.j, max_j)
+            max_k = max(vertex.k, max_k)
+        return Volume(
+            i=Bounds(min_i, max_i),
+            j=Bounds(min_j, max_j),
+            k=Bounds(min_k, max_k),
+        )

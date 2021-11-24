@@ -3,6 +3,7 @@ from PIL import Image, ImageDraw
 from .constants import OUTPUT_DIRECTORY
 from .ray import Ray
 from .types import Color, Scene, Vector3, Viewport
+from .volume import Octree
 
 from typing import List
 from pathlib import Path
@@ -11,6 +12,8 @@ class Tracer:
     def __init__(self, viewport: Viewport = None, scene: Scene = None, directory: str = None, filename: str = "output") -> None:
         self.viewport = viewport or Viewport()
         self.scene = scene or Scene()
+        print(self.scene.objects)
+        # self.scene.construct()
         self.image = Image.new("RGB", (self.viewport.width, self.viewport.height))
         self.draw = ImageDraw.Draw(self.image)
 

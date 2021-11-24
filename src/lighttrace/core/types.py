@@ -1,11 +1,16 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
-from functools import partial
 from math import tan, pi
-from typing import Generator, Generic, List, NamedTuple, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Generic, List, NamedTuple, Optional, Set, Tuple, TypeVar, Union
 
-from .constants import DELTA_SMALL
+from .constants import DELTA_SMALL, INFINITY 
+
+
+L = TypeVar("L")
+S = TypeVar("S")
+T = TypeVar("T")
+
 
 RGBAPixel = NamedTuple("RGBAPixel", [("r", int), ("g", int), ("b", int), ("alpha", int)])
 CoefficientSet = NamedTuple(
@@ -19,9 +24,10 @@ CoefficientSet = NamedTuple(
     ]
 )
 
-L = TypeVar("L")
-S = TypeVar("S")
-T = TypeVar("T")
+class BoundsType(IntEnum):
+    INFINITE = 0
+    FINITE = 1
+
 
 class Scalar(float):
     def __init__(self, v: float) -> None:
@@ -33,61 +39,80 @@ class Scalar(float):
 
 PARAMETER_REGISTRY = {}
 class Parameter:
-    def __init__(self, start: float, stop: float = 0, steps: int = 1):
+    def __init__(self, start: T, stop: T = 0, steps: int = 1, function: Callable[[T], T] = None):
         self.__start = start
         self.__stop = stop
         self.__value = start
         self.__delta = (stop - start) / steps
+        self.__observers = []
+        self.__function = function or self.__identity
+        self.__result = self.__function(self.__value)
         PARAMETER_REGISTRY[hash(self)] = self
+
+    @staticmethod
+    def __identity(v: T, *args, **kwargs) -> T:
+        return v
 
     def rewind(self) -> None:
         self.__value = self.__start
 
+    def add_observer(self, observer, attr):
+        self.__observers.append((observer, attr))
+        return self
+
     def __next__(self) -> float:
         if abs(self.__value - self.__stop) > DELTA_SMALL:
             self.__value += self.__delta
-        return self.__value
+            self.__result = self.__function(self.__value)
+            for observer, attr in self.__observers:
+                observer.update_parameter(attr, self.__result)
+        return self.__result
 
     def __call__(self) -> float:
-        return self.__value
+        return self.__function(self.__value)
 
     def __hash__(self) -> int:
-        return hash((self.__start, self.__stop, self.__delta))
+        return hash((self.__start, self.__stop, self.__delta, self.__function))
+
+    def __repr__(self) -> str:
+        return f"<Parameter value={self.__value}, start={self.__start}, stop={self.__stop}, step={self.__delta}>"
+
+    def __str__(self) -> str:
+        return repr(self)
 
 StaticParameter = lambda v: Parameter(v, v)
 
 class Parameterized:
     parameters: List[str]
-    def __next__(self):
-        for p in self.parameters:
-            if hasattr(self, p):
-                parameter = getattr(self, p)
-                if hasattr(parameter, "__next__"):
-                    next(parameter)
+    def update_parameter(self, attr: str, value: T):
+        setattr(self, attr, value)
 
 
-class ThreeSpace(Generic[T]):
+class ThreeSpace(Generic[T], Parameterized):
     def __init__(self, i: Optional[T] = 0, j: Optional[T] = 0, k: Optional[T] = 0, scalar: Optional[Scalar] = 0) -> None:
-        if not isinstance(i, Parameter):
-            i = StaticParameter(i)
-        if not isinstance(j, Parameter):
-            j = StaticParameter(j)
-        if not isinstance(k, Parameter):
-            k = StaticParameter(k)
+        self.parameters = []
+        if isinstance(i, Parameter):
+            self.__i = i.add_observer(self, "i")
+            self.i = i()
+            self.parameters.append("i")
+        else:
+            self.i = i
+        if isinstance(j, Parameter):
+            self.__j = j.add_observer(self, "j")
+            self.j = j()
+            self.parameters.append("j")
+        else:
+            self.j = j  
+        if isinstance(k, Parameter):
+            self.__k = k.add_observer(self, "k")
+            self.k = k()
+            self.parameters.append("k")
+        else:
+            self.k = k
 
-        self.__i = i
-        self.__j = j
-        self.__k = k
-
-        next(self)
         self.mag = self.dot(self)**.5
         self._normalized = None
-
-    def __next__(self):
-        self.i: T = next(self.__i)
-        self.j: T = next(self.__j)
-        self.k: T = next(self.__k)
-        return self
+        self.__inverse = None
 
     def __add__(self, other: Generic[T]) -> Generic[T]:
         return self.__class__(self.i + other.i, self.j + other.j, self.k + other.k)
@@ -119,11 +144,32 @@ class ThreeSpace(Generic[T]):
     def __rmul__(self, s: float) -> Generic[T]:
         return self.__mul__(s)
 
-    def __imul__(self, s: float) -> Generic[T]:
-        self.i *= s
-        self.j *= s
-        self.k *= s
+    def __imul__(self, other: Generic[T]) -> Generic[T]:
+        self.i *= other.i
+        self.j *= other.j
+        self.k *= other.k
         return self
+
+    def __div__(self, s: float) -> Generic[T]:
+        return self.__class__(self.i / s, self.j / s, self.k / s)
+
+    def __rdiv__(self, s: float) -> Generic[T]:
+        return self.__div__(s)
+
+    def __idiv__(self, s: float) -> Generic[T]:
+        self.i /= s
+        self.j /= s
+        self.k /= s
+        return self
+
+    def __getitem__(self, idx: int) -> T:
+        if idx == 0:
+            return self.i
+        elif idx == 1:
+            return self.j
+        elif idx == 2:
+            return self.k
+        raise IndexError("3-Spaces do not have index > 2")
 
     def __len__(self):
         return self.mag
@@ -137,6 +183,15 @@ class ThreeSpace(Generic[T]):
         return (
             self.i * other.i + self.j * other.j + self.k * other.k
         )
+
+    @property
+    def inverse(self) -> Generic[T]:
+        if self.__inverse is None:
+            ii = 1 / self.i if self.i else INFINITY
+            ij = 1 / self.j if self.j else INFINITY
+            ik = 1 / self.k if self.k else INFINITY
+            self.__inverse = Vector3(ii, ij, ik)
+        return self.__inverse
 
 
 class Point(ThreeSpace):
@@ -194,10 +249,6 @@ class Color(ThreeSpace):
 
 
 class Vector3(ThreeSpace):
-    # def __init__(self, i: Optional[T] = 0, j: Optional[T] = 0, k: Optional[T] = 0, scalar: Optional[Scalar] = 0) -> None:
-    #     print(self)
-    #     super().__init__(i, j, k, scalar)
-
     def __repr__(self) -> str:
         return f"<Vector i={self.i}, j={self.j}, k={self.k}>"
 
@@ -223,13 +274,36 @@ class Vector3(ThreeSpace):
     @property
     def normalized(self) -> Generic[T]:
         if self._normalized is None:
-            if self.mag:
-                self._normalized = Vector3(self.i / self.mag, self.j / self.mag, self.k / self.mag)
-            else:
-                self._normalized = self
+            self._normalized = Vector3(self.i / self.mag, self.j / self.mag, self.k / self.mag)
         return self._normalized
 
 Vector = Vector3
+
+@dataclass
+class AbstractRay:
+    anchor: Point = None
+    direction: Vector3 = None
+
+@dataclass
+class IntersectionResult:
+    intersects: bool = False
+    tmin: float = -INFINITY
+    tmax: float = INFINITY
+    r: AbstractRay = None
+    n: Vector3 = None
+
+    @property
+    def point(self) -> Point:
+        if self.r is not None:
+            return self.r.anchor + (self.r.direction * self.tmin)
+    
+    def __bool__(self) -> bool:
+        return self.intersects
+
+@dataclass
+class Bounds:
+    min: float = -INFINITY
+    max: float = INFINITY
 
 class LightType(IntEnum):
     AMBIENT = 0
@@ -248,6 +322,8 @@ class Light(Parameterized):
 
 
 class SceneObject(ABC):
+    attrs = tuple()
+
     @abstractmethod
     def intersect(self, ray: Vector3) -> bool:
         raise NotImplementedError()
@@ -256,12 +332,52 @@ class SceneObject(ABC):
     def shade(self, scene: Generic[L, S]) -> RGBAPixel:
         raise NotImplementedError()
 
+    @property
+    @abstractmethod
+    def center(self) -> ThreeSpace[T]:
+        raise NotImplementedError()
+
+    
+    @property
+    @abstractmethod
+    def bounds(self) -> Tuple[Bounds]:
+        raise NotImplementedError()
+
+    @property
+    def centroid(self) -> Point:
+        if self._type == BoundsType.FINITE:
+            return Point(*[(db.min + db.max )/ 2 for db in self.bounds])
+        return None
+
+    @property
+    def is_finite(self) -> bool:
+        return self._type == BoundsType.FINITE
+
+    def __repr__(self) -> str:
+        name = self.__class__.__name__
+        attr_str = ", ".join(f'{k}={getattr(self, k, "None")}' for k in self.attrs)
+        return f"<{name} {attr_str}>"
+
+    def __hash__(self) -> bytes:
+        return hash(tuple(getattr(self, attr, 0) for attr in self.attrs))
+
+
+class BoundingVolumeHierarchy(ABC):
+    @abstractmethod
+    def get_candidates(self, ray: Any) -> Set[SceneObject]:
+        raise NotImplementedError()
+
 
 @dataclass
 class Scene(Generic[L, S]):
     lights: List[Light]
     objects: List[SceneObject]
     background: Color = Color(0, 0, 0)
+    bvh_factory: Callable[[List[SceneObject]], BoundingVolumeHierarchy] = None
+    bvh: BoundingVolumeHierarchy = None
+
+    def construct(self):
+        self.bvh = self.bvh_factory(self.objects)
 
     def add(self, *items: Union[Light, SceneObject]) -> None:
         for item in items:
@@ -274,10 +390,27 @@ class Scene(Generic[L, S]):
                     "cannot add item that is neither an instance of a subclass of Light nor SceneObject"
                 )
 
+    @property
+    def center(self) -> Vector3:
+        p = Vector3()
+        for o in filter(lambda e: e._type is BoundsType.FINITE, self.objects):
+            p += o.center
+        return (p * (1 / len(self.objects)))
+
+    
+    @property
+    def unbounded_objects(self) -> Set[SceneObject]:
+        return {o for o in self.objects if not o.is_finite}
+
+
     def __next__(self):
         global PARAMETER_REGISTRY
         for p in PARAMETER_REGISTRY.values():
+            # print("=====================")
+            # print(f"Before: {p}")
             next(p)
+            # print(f"After: {p}")
+            # print("=====================")
 
 
 class Animation:
@@ -294,6 +427,7 @@ class Animation:
         return self
 
     def __exit__(self, *args):
+        print(*args)
         return True
 
 

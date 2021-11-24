@@ -9,7 +9,9 @@ class Ray:
         self.object = None
 
     def trace(self, scene: Scene) -> RGBAPixel:
-        for obj in scene.objects:
+        # candidates = scene.bvh.get_candidates(self) | scene.unbounded_objects
+        candidates = scene.objects
+        for obj in candidates:
             if obj.intersect(self):
                 continue
         return self.object is not None
