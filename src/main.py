@@ -18,11 +18,11 @@ def run(filename: str, animate: bool = False) -> None:
     surface_1 = Surface(Colors.MATTE_BLUE, coefficients_1)
     surface_2 = Surface(Colors.GREY_6, coefficients_2)
     mesh = Mesh(surface=surface_2)
-    mesh.load(filename)
+    # mesh.load(filename)
 
     width = 300
     height = 300
-    name = "orbit_3"
+    name = "orbit_5"
     # width = int(input("Width: "))
     # height = int(input("Height: "))
     # name = input("Output name: ")
@@ -51,7 +51,7 @@ def run(filename: str, animate: bool = False) -> None:
         # Sphere(radius=7, center=Point(10, 10, 10), surface=surface_1),
         # *mesh.generate_polygons()
     )
-    O = Vector3(sine(E / 2, FRAMES)(), Linear(0, 400), cosine(E, FRAMES)())
+    O = Vector3(sine(E / 2, FRAMES)(), 200, cosine(E, FRAMES)())
     with Animation(scene, frames=FRAMES) as animation:
         for i, _scene in animation:
             viewport = Viewport(
